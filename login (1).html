@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Club Hub</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); padding: 2rem; }
+        .auth-card { background: var(--bg-card); border-radius: var(--radius-xl); padding: 3rem; max-width: 450px; width: 100%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
+        .auth-header { text-align: center; margin-bottom: 2rem; }
+        .auth-logo { width: 80px; height: 80px; margin: 0 auto 1.5rem; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: white; }
+        .auth-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .auth-subtitle { color: var(--text-secondary); font-size: 0.9375rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary); }
+        .form-input { width: 100%; padding: 0.875rem 1rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 0.875rem; color: var(--text-primary); font-family: inherit; transition: all var(--transition); }
+        .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .btn-auth { width: 100%; padding: 1rem; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border: none; border-radius: var(--radius-md); font-size: 1rem; font-weight: 600; cursor: pointer; transition: all var(--transition); }
+        .btn-auth:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4); }
+        .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .auth-link { text-align: center; margin-top: 1.5rem; }
+        .auth-link a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .auth-link a:hover { text-decoration: underline; }
+        .alert { padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: none; }
+        .alert.show { display: block; }
+        .alert-error { background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); color: var(--danger); }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); color: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="auth-logo"><i class="fas fa-users-cog"></i></div>
+                <h1 class="auth-title">Welcome Back</h1>
+                <p class="auth-subtitle">Sign in to your Club Hub account</p>
+            </div>
+            <div id="alertMessage" class="alert"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email Address</label>
+                    <input type="email" id="email" class="form-input" placeholder="Enter your email" required autocomplete="email" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="Enter your password" required autocomplete="current-password" />
+                </div>
+                <button type="submit" class="btn-auth" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Sign In</button>
+            </form>
+            <div class="auth-link">Don't have an account? <a href="register.html">Sign up</a></div>
+        </div>
+    </div>
+    <script>
+        checkSession();
+        async function checkSession() {
+            try {
+                const response = await fetch('api/auth.php?action=check');
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = data.data.is_system_owner ? 'super-owner-dashboard.html' : 'index.html';
+                }
+            } catch (error) {
+                console.error('Session check error:', error);
+            }
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('loginBtn');
+            const alert = document.getElementById('alertMessage');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+            
+            try {
+                const response = await fetch('api/auth.php?action=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert.className = 'alert alert-success show';
+                    alert.innerHTML = '<i class="fas fa-check-circle"></i> Login successful! Redirecting...';
+                    setTimeout(() => {
+                        window.location.href = data.data.is_system_owner ? 'super-owner-dashboard.html' : 'index.html';
+                    }, 1000);
+                } else {
+                    alert.className = 'alert alert-error show';
+                    alert.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.message;
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert.className = 'alert alert-error show';
+                alert.innerHTML = '<i class="fas fa-exclamation-circle"></i> An error occurred. Please try again.';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            }
+        });
+    </script>
+</body>
+</html>

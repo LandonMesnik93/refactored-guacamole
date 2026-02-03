@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Owner Dashboard - Club Hub</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <main class="main-content" style="width: 100%;">
+            <header class="top-bar">
+                <div>
+                    <h1 style="font-size: 1.5rem; font-weight: 700;">Super Owner Dashboard</h1>
+                </div>
+                <div class="top-bar-actions">
+                    <button class="btn btn-secondary" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">System Overview</h1>
+                        <p class="page-subtitle">Manage clubs, users, and system-wide settings</p>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="systemStats">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalUsers">0</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon accent"><i class="fas fa-users-cog"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalClubs">0</div>
+                            <div class="stat-label">Total Clubs</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon secondary"><i class="fas fa-clock"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="pendingRequests">0</div>
+                            <div class="stat-label">Pending Requests</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon success"><i class="fas fa-chart-line"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="activeClubs">0</div>
+                            <div class="stat-label">Active Clubs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Pending Club Requests</h2>
+                    </div>
+                    <div id="pendingRequestsList"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">All Clubs</h2>
+                    </div>
+                    <div id="clubsList"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">All Users</h2>
+                    </div>
+                    <div id="usersList"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                // Check authentication
+                const authCheck = await fetch('api/auth.php?action=check');
+                const authData = await authCheck.json();
+                
+                if (!authData.success || !authData.data.is_system_owner) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                // Load stats
+                const statsRes = await fetch('api/super_owner.php?action=stats');
+                const stats = await statsRes.json();
+                if (stats.success) {
+                    document.getElementById('totalUsers').textContent = stats.data.total_users;
+                    document.getElementById('totalClubs').textContent = stats.data.total_clubs;
+                    document.getElementById('pendingRequests').textContent = stats.data.pending_requests;
+                    document.getElementById('activeClubs').textContent = stats.data.active_clubs;
+                }
+
+                // Load pending requests
+                const requestsRes = await fetch('api/super_owner.php?action=pending-requests');
+                const requests = await requestsRes.json();
+                displayPendingRequests(requests.data || []);
+
+                // Load all clubs
+                const clubsRes = await fetch('api/super_owner.php?action=clubs');
+                const clubs = await clubsRes.json();
+                displayClubs(clubs.data || []);
+
+                // Load all users
+                const usersRes = await fetch('api/super_owner.php?action=users');
+                const users = await usersRes.json();
+                displayUsers(users.data || []);
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        function displayPendingRequests(requests) {
+            const container = document.getElementById('pendingRequestsList');
+            if (requests.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No pending requests</p></div>';
+                return;
+            }
+
+            container.innerHTML = requests.map(r => `
+                <div style="padding: 1.5rem; background: var(--bg-tertiary); border-radius: var(--radius-md); margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem;">${escapeHtml(r.club_name)}</h3>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary);">Requested by: ${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}</p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="approveClub(${r.id})"><i class="fas fa-check"></i> Approve</button>
+                            <button class="btn btn-secondary" onclick="rejectClub(${r.id})"><i class="fas fa-times"></i> Reject</button>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Description:</strong> ${escapeHtml(r.description || 'N/A')}</p>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary);"><strong>Advisor:</strong> ${escapeHtml(r.staff_advisor || 'N/A')}</p>
+                </div>
+            `).join('');
+        }
+
+        function displayClubs(clubs) {
+            const container = document.getElementById('clubsList');
+            if (clubs.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-users-cog"></i><p>No clubs yet</p></div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Club Name</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">President</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Members</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${clubs.map(c => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 1rem; font-weight: 600;">${escapeHtml(c.name)}</td>
+                                <td style="padding: 1rem;">${escapeHtml(c.president_first_name || '')} ${escapeHtml(c.president_last_name || '')}</td>
+                                <td style="padding: 1rem;">${c.member_count}</td>
+                                <td style="padding: 1rem;">
+                                    <span style="color: ${c.is_active ? 'var(--success)' : 'var(--danger)'};">●</span> ${c.is_active ? 'Active' : 'Inactive'}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function displayUsers(users) {
+            const container = document.getElementById('usersList');
+            if (users.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No users yet</p></div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Name</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Email</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Clubs</th>
+                            <th style="padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map(u => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 1rem; font-weight: 600;">${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</td>
+                                <td style="padding: 1rem;">${escapeHtml(u.email)}</td>
+                                <td style="padding: 1rem;">${u.club_count}</td>
+                                <td style="padding: 1rem;">
+                                    <span style="color: ${u.is_active ? 'var(--success)' : 'var(--danger)'};">●</span> ${u.is_active ? 'Active' : 'Inactive'}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function approveClub(requestId) {
+            if (!confirm('Approve this club creation request?')) return;
+            
+            try {
+                const response = await fetch('api/super_owner.php?action=approve-club', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: requestId })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Club approved! Access code: ' + data.data.access_code);
+                    loadDashboard();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error approving club:', error);
+                alert('An error occurred');
+            }
+        }
+
+        async function rejectClub(requestId) {
+            const reason = prompt('Enter rejection reason (optional):');
+            if (reason === null) return;
+            
+            try {
+                const response = await fetch('api/super_owner.php?action=reject-club', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: requestId, reason: reason })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Club request rejected');
+                    loadDashboard();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error rejecting club:', error);
+                alert('An error occurred');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('api/auth.php?action=logout', { method: 'POST' });
+                window.location.href = 'login.html';
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+</html>
